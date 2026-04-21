@@ -1,2 +1,0 @@
-# iryx
-gestão financeira pessoal
