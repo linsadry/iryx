@@ -1,16 +1,20 @@
 name: Backup Iryx Supabase
+
 on:
   schedule:
-    - cron: '0 6 1 * *'   # todo dia 1 às 06h UTC
-  workflow_dispatch:       # também permite rodar manualmente
+    - cron: '0 9 1 * *'   # todo dia 1 do mês às 09h UTC (06h horário de Brasília)
+  workflow_dispatch:       # permite rodar manualmente a qualquer momento
 
 jobs:
   backup:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write      # necessário para fazer commit no repositório
+
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
+      - name: Checkout repositório
+        uses: actions/checkout@v4
 
       - name: Exportar tabelas do Supabase
         env:
@@ -20,37 +24,90 @@ jobs:
           DATE=$(date +%Y-%m-%d)
           mkdir -p backups
 
-          curl -s "$SB_URL/rest/v1/iryx_transactions?order=date.asc&limit=5000" \
-            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
+          echo "Exportando iryx_transactions..."
+          curl -sf "$SB_URL/rest/v1/iryx_transactions?order=date.asc&limit=9999" \
+            -H "apikey: $SB_KEY" \
+            -H "Authorization: Bearer $SB_KEY" \
             -o /tmp/transactions.json
 
-          curl -s "$SB_URL/rest/v1/iryx_goals?order=created_at.asc" \
-            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
+          echo "Exportando iryx_goals..."
+          curl -sf "$SB_URL/rest/v1/iryx_goals?order=created_at.asc" \
+            -H "apikey: $SB_KEY" \
+            -H "Authorization: Bearer $SB_KEY" \
             -o /tmp/goals.json
 
-          curl -s "$SB_URL/rest/v1/iryx_budgets" \
-            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
+          echo "Exportando iryx_budgets..."
+          curl -sf "$SB_URL/rest/v1/iryx_budgets" \
+            -H "apikey: $SB_KEY" \
+            -H "Authorization: Bearer $SB_KEY" \
             -o /tmp/budgets.json
 
-          python3 -c "
-          import json, datetime
-          data = {
-            'version': '2.1',
-            'exported_at': '$DATE',
+          echo "Exportando iryx_clinicas..."
+          curl -sf "$SB_URL/rest/v1/iryx_clinicas?order=nome.asc" \
+            -H "apikey: $SB_KEY" \
+            -H "Authorization: Bearer $SB_KEY" \
+            -o /tmp/clinicas.json
+
+          echo "Exportando iryx_turnos..."
+          curl -sf "$SB_URL/rest/v1/iryx_turnos?order=data.asc&limit=9999" \
+            -H "apikey: $SB_KEY" \
+            -H "Authorization: Bearer $SB_KEY" \
+            -o /tmp/turnos.json
+
+          python3 - <<'PYEOF'
+          import json, os
+
+          date = os.environ.get('DATE', 'unknown')
+
+          def load(path):
+            try:
+              with open(path) as f:
+                data = json.load(f)
+              return data if isinstance(data, list) else []
+            except Exception as e:
+              print(f"Aviso: erro ao ler {path}: {e}")
+              return []
+
+          transactions = load('/tmp/transactions.json')
+          goals        = load('/tmp/goals.json')
+          budgets      = load('/tmp/budgets.json')
+          clinicas     = load('/tmp/clinicas.json')
+          turnos       = load('/tmp/turnos.json')
+
+          backup = {
+            'version':     '2.1',
+            'exported_at': date,
             'tables': {
-              'iryx_transactions': json.load(open('/tmp/transactions.json')),
-              'iryx_goals':        json.load(open('/tmp/goals.json')),
-              'iryx_budgets':      json.load(open('/tmp/budgets.json')),
+              'iryx_transactions': transactions,
+              'iryx_goals':        goals,
+              'iryx_budgets':      budgets,
+              'iryx_clinicas':     clinicas,
+              'iryx_turnos':       turnos,
             }
           }
-          json.dump(data, open('backups/$DATE.json', 'w'), ensure_ascii=False, indent=2)
-          print(f'Backup: {len(data[\"tables\"][\"iryx_transactions\"])} transações')
-          "
 
-      - name: Commit backup
+          outpath = f'backups/{date}.json'
+          with open(outpath, 'w', encoding='utf-8') as f:
+            json.dump(backup, f, ensure_ascii=False, indent=2)
+
+          print(f"Backup gerado: {outpath}")
+          print(f"  transacoes : {len(transactions)}")
+          print(f"  goals      : {len(goals)}")
+          print(f"  budgets    : {len(budgets)}")
+          print(f"  clinicas   : {len(clinicas)}")
+          print(f"  turnos     : {len(turnos)}")
+          PYEOF
+
+      - name: Commit e push do backup
         run: |
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add backups/
-          git diff --staged --quiet || git commit -m "backup: $(date +%Y-%m-%d)"
-          git push
+          # só faz commit se houver algo novo
+          if git diff --staged --quiet; then
+            echo "Nenhuma alteração — backup idêntico ao anterior."
+          else
+            git commit -m "backup: $(date +%Y-%m-%d)"
+            git push
+            echo "Backup commitado com sucesso."
+          fi
