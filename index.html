@@ -3684,6 +3684,578 @@ async function initApp(){
   bnav('dashboard');
   await renderDash();
 }
+<!-- ═══════════════════════════════════════════
+     IRYX v2.1 — CORREÇÕES DE SEGURANÇA (AUDITORIA 05/06/2026)
+     Cole este bloco IMEDIATAMENTE ANTES de </body>
+     Não remova nada do arquivo original — este bloco
+     sobrescreve as funções vulneráveis automaticamente.
+     ═══════════════════════════════════════════════ -->
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// IRYX v2.1 — BLOCO DE CORREÇÕES DA AUDITORIA
+// Cole este bloco ANTES do </script> final do index.html
+// Substitui / sobrescreve as funções vulneráveis
+// ═══════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────
+// [S-06] Constantes de app (sem URL hardcoded)
+// ─────────────────────────────────────────────────────────────────
+const APP_NAME = 'Iryx · Gestão Financeira';
+const APP_URL  = 'iryx.pages.dev';
+
+// ─────────────────────────────────────────────────────────────────
+// [S-07] sbFetch com AbortController + timeout 12s
+// ─────────────────────────────────────────────────────────────────
+async function sbFetch(url, opts={}) {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), 12000);
+  try {
+    const r = await fetch(url, {...opts, signal: c.signal});
+    clearTimeout(t);
+    return r;
+  } catch(e) {
+    clearTimeout(t);
+    if (e.name === 'AbortError') throw new Error('Timeout — verifique sua conexão');
+    throw e;
+  }
+}
+
+// Redefine helpers Supabase usando sbFetch
+const H = () => ({'Content-Type':'application/json','apikey':KEY,'Authorization':`Bearer ${KEY}`});
+const sbGet = (t,q='') => sbFetch(`${SB_URL}/rest/v1/${t}?${q}&order=created_at.desc`,{headers:H()}).then(r=>r.ok?r.json():Promise.reject(r));
+const sbPost = (t,d) => sbFetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{...H(),'Prefer':'return=representation'},body:JSON.stringify(d)}).then(r=>r.ok?r.json():Promise.reject(r));
+const sbPatch = (t,id,d) => sbFetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'PATCH',headers:{...H(),'Prefer':'return=representation'},body:JSON.stringify(d)}).then(r=>r.ok?r.json():Promise.reject(r));
+const sbDel = (t,id) => sbFetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'DELETE',headers:H()});
+
+// ─────────────────────────────────────────────────────────────────
+// [S-04] esc() — sanitização XSS para uso em innerHTML
+// ─────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [I-02] parseNum() — corrigido para separador de milhar BR
+// ─────────────────────────────────────────────────────────────────
+function parseNum(v) {
+  if (v === '' || v === null || v === undefined) return NaN;
+  var s = String(v).trim().replace(/[R$\s]/g,'');
+  var hasComma = s.indexOf(',') > -1;
+  var hasDot   = s.indexOf('.') > -1;
+  if (hasComma && hasDot) {
+    s = s.replace(/\./g,'').replace(',','.');  // 1.234,56 → 1234.56
+  } else if (hasComma && !hasDot) {
+    s = s.replace(',','.');                    // 1234,56 → 1234.56
+  }
+  return parseFloat(s);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [C-03] parseDate() — rejeita datas inválidas
+// ─────────────────────────────────────────────────────────────────
+function parseDate(s) {
+  const p = s.split(/[\/\-]/);
+  if (p.length < 2) return null;
+  const d = parseInt(p[0]), mo = parseInt(p[1]);
+  let y = p[2] ? parseInt(p[2]) : new Date().getFullYear();
+  if (y < 100) y += 2000;
+  if (d < 1 || d > 31 || mo < 1 || mo > 12) return null;
+  const dateStr = `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const check = new Date(dateStr + 'T12:00:00');
+  if (isNaN(check.getTime())) return null;        // 29/02 em ano não-bissexto → null
+  const yr = check.getFullYear();
+  if (yr < 2000 || yr > 2099) return null;
+  return dateStr;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [S-01] PBKDF2 com salt aleatório (substituí SHA-256 simples)
+// ─────────────────────────────────────────────────────────────────
+async function hashPin(pin, saltHex) {
+  const enc = new TextEncoder();
+  const keyMat = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
+  let saltArr;
+  if (saltHex) {
+    saltArr = new Uint8Array(saltHex.match(/.{2}/g).map(b => parseInt(b,16)));
+  } else {
+    saltArr = crypto.getRandomValues(new Uint8Array(16));
+  }
+  const bits = await crypto.subtle.deriveBits(
+    {name:'PBKDF2', salt:saltArr, iterations:100000, hash:'SHA-256'},
+    keyMat, 256
+  );
+  const hash = Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2,'0')).join('');
+  const salt = Array.from(saltArr).map(b => b.toString(16).padStart(2,'0')).join('');
+  return {hash, salt};
+}
+async function newPinHash(pin)               { return hashPin(pin, null); }
+async function verifyPin(pin, storedHash, storedSalt) {
+  if (!storedSalt) return false;
+  const {hash} = await hashPin(pin, storedSalt);
+  return hash === storedHash;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [S-02] Criptografar anon key com AES-GCM derivado do PIN
+// ─────────────────────────────────────────────────────────────────
+async function deriveKeyFromPin(pin) {
+  const enc = new TextEncoder();
+  const keyMat = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey']);
+  const salt = localStorage.getItem('iu') || 'iryx-app';
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt:enc.encode(salt), iterations:100000, hash:'SHA-256'},
+    keyMat, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']
+  );
+}
+async function encryptKey(rawKey, pin) {
+  try {
+    const key = await deriveKeyFromPin(pin);
+    const iv  = crypto.getRandomValues(new Uint8Array(12));
+    const ct  = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(rawKey));
+    const ivHex = Array.from(iv).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const ctHex = Array.from(new Uint8Array(ct)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    return ivHex + ':' + ctHex;
+  } catch(e) { return null; }
+}
+async function decryptKey(encStr, pin) {
+  try {
+    const [ivHex, ctHex] = encStr.split(':');
+    const iv = new Uint8Array(ivHex.match(/.{2}/g).map(b=>parseInt(b,16)));
+    const ct = new Uint8Array(ctHex.match(/.{2}/g).map(b=>parseInt(b,16)));
+    const key = await deriveKeyFromPin(pin);
+    const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+    return new TextDecoder().decode(plain);
+  } catch(e) { return null; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [S-01b + S-02b] checkPin() atualizado
+// ─────────────────────────────────────────────────────────────────
+async function checkPin() {
+  const storedHash = localStorage.getItem('iryx_pin');
+  const storedSalt = localStorage.getItem('iryx_pin_salt');
+  let ok = false;
+
+  if (storedSalt) {
+    ok = await verifyPin(pinBuffer, storedHash, storedSalt);
+  } else if (storedHash) {
+    // legado SHA-256 — verifica e migra automaticamente para PBKDF2
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pinBuffer + 'iryx-salt'));
+    const legacy = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    ok = legacy === storedHash;
+    if (ok) {
+      const {hash, salt} = await newPinHash(pinBuffer);
+      localStorage.setItem('iryx_pin', hash);
+      localStorage.setItem('iryx_pin_salt', salt);
+    }
+  }
+
+  if (ok) {
+    const u      = localStorage.getItem('iu');
+    const encKey = localStorage.getItem('ik_enc');
+    const rawKey = localStorage.getItem('ik');
+    if (encKey) { KEY = await decryptKey(encKey, pinBuffer) || rawKey; }
+    else if (rawKey) { KEY = rawKey; }
+    SB_URL = u;
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('app').style.display   = 'flex';
+    initApp();
+  } else {
+    document.getElementById('pin-err').style.display = 'block';
+    document.querySelectorAll('.pin-dot').forEach(d => {
+      d.classList.add('shake');
+      setTimeout(() => d.classList.remove('shake'), 300);
+    });
+    setTimeout(() => {
+      pinBuffer = ''; updatePinDots();
+      document.getElementById('pin-err').style.display = 'none';
+    }, 700);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [S-01c + S-02c] setupPin() — PBKDF2 + key criptografada
+// ─────────────────────────────────────────────────────────────────
+function setupPin() {
+  const pin1 = prompt('Crie um PIN de 4 dígitos para próximos acessos:');
+  if (!pin1 || !/^\d{4}$/.test(pin1)) { alert('PIN inválido — use exatamente 4 dígitos.'); return; }
+  const pin2 = prompt('Confirme o PIN:');
+  if (pin1 !== pin2) { alert('PINs não coincidem. Tente novamente.'); return; }
+  newPinHash(pin1).then(async ({hash, salt}) => {
+    localStorage.setItem('iryx_pin', hash);
+    localStorage.setItem('iryx_pin_salt', salt);
+    if (KEY) {
+      const enc = await encryptKey(KEY, pin1);
+      if (enc) { localStorage.setItem('ik_enc', enc); localStorage.removeItem('ik'); }
+      else      { localStorage.setItem('ik', KEY); }
+    }
+    toast('PIN criado! Da próxima vez use só o PIN.');
+    launch();
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [S-02d] trocarPin() — re-criptografa key com novo PIN
+// ─────────────────────────────────────────────────────────────────
+function trocarPin() {
+  const atual = prompt('Digite o PIN atual:');
+  if (!atual) return;
+  const storedHash = localStorage.getItem('iryx_pin');
+  const storedSalt = localStorage.getItem('iryx_pin_salt');
+
+  (storedSalt ? verifyPin(atual, storedHash, storedSalt) : (async () => {
+    // fallback legado
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(atual + 'iryx-salt'));
+    const lh  = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    return lh === storedHash;
+  })()).then(async ok => {
+    if (!ok) { toast('PIN atual incorreto'); return; }
+    const novo = prompt('Novo PIN (4 dígitos):');
+    if (!novo || !/^\d{4}$/.test(novo)) { alert('PIN inválido'); return; }
+    if (novo !== prompt('Confirme o novo PIN:')) { alert('PINs não coincidem'); return; }
+    const {hash, salt} = await newPinHash(novo);
+    localStorage.setItem('iryx_pin', hash);
+    localStorage.setItem('iryx_pin_salt', salt);
+    if (KEY) {
+      const enc = await encryptKey(KEY, novo);
+      if (enc) { localStorage.setItem('ik_enc', enc); localStorage.removeItem('ik'); }
+    }
+    toast('PIN alterado ✓');
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [I-01] Deduplicação de importação de PDF contra o banco
+// ─────────────────────────────────────────────────────────────────
+async function checkDuplicates(txs) {
+  if (!txs.length) return new Set();
+  const dates = txs.map(t => t.date).filter(Boolean).sort();
+  if (!dates.length) return new Set();
+  try {
+    const existing = await sbGet('iryx_transactions',
+      `date=gte.${dates[0]}&date=lte.${dates[dates.length-1]}&type=eq.despesa`);
+    return new Set(
+      existing.map(t =>
+        `${t.date}_${parseFloat(t.amount).toFixed(2)}_${String(t.description).substring(0,12).toLowerCase()}`
+      )
+    );
+  } catch(e) { return new Set(); }
+}
+
+async function importSel() {
+  const existingKeys = await checkDuplicates(pdfTxs.filter((_,i) => document.getElementById(`pc${i}`)?.checked));
+  let cnt = 0, skipped = 0;
+  for (let i = 0; i < pdfTxs.length; i++) {
+    const cb  = document.getElementById(`pc${i}`);
+    if (!cb?.checked) continue;
+    const cat = document.getElementById(`pcat${i}`)?.value || pdfTxs[i].category;
+    const k   = `${pdfTxs[i].date}_${parseFloat(pdfTxs[i].amount).toFixed(2)}_${String(pdfTxs[i].description).substring(0,12).toLowerCase()}`;
+    if (existingKeys.has(k)) { skipped++; continue; }
+    await sbPost('iryx_transactions', {
+      type:'despesa', date:pdfTxs[i].date, description:pdfTxs[i].description,
+      amount:pdfTxs[i].amount, category:cat, origin:'card',
+      nature:pdfTxs[i].nature||'variavel', tags:pdfTxs[i].tags||''
+    });
+    cnt++;
+  }
+  const skipMsg = skipped > 0 ? ` (${skipped} duplicata${skipped>1?'s':''} ignorada${skipped>1?'s':''})` : '';
+  toast(`${cnt} transação${cnt!==1?'s':''} importada${cnt!==1?'s':''}${skipMsg}`);
+  resetPDF();
+  await loadTx();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [I-03] deleteClinica — deleta turnos explicitamente antes da clínica
+// ─────────────────────────────────────────────────────────────────
+async function deleteClinica() {
+  const id = document.getElementById('mc-id').value;
+  const c  = allClinics.find(x => x.id === id);
+  const nT = allTurnos.filter(t => t.clinica_id === id).length;
+  const msg = nT > 0
+    ? `Excluir "${c?.nome||'clínica'}" e ${nT} turno${nT>1?'s':''} vinculado${nT>1?'s':''}?\n\nEsta ação não pode ser desfeita.`
+    : `Excluir "${c?.nome||'clínica'}"? Esta ação não pode ser desfeita.`;
+  if (!confirm(msg)) return;
+  // deletar turnos explicitamente (garante mesmo sem ON DELETE CASCADE)
+  for (const t of allTurnos.filter(x => x.clinica_id === id)) {
+    await sbFetch(`${SB_URL}/rest/v1/iryx_turnos?id=eq.${t.id}`, {method:'DELETE', headers:H()});
+  }
+  await sbDel('iryx_clinicas', id);
+  closeMod('mod-clinica');
+  toast('Clínica excluída');
+  await loadClinicas();
+  await loadTurnosData();
+  populateClinicaSelects();
+  renderRanking();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [I-04] atrasoMedio — fallback para evitar NaN no score
+// Patch via wrapper de renderRanking (monkey-safe override)
+// ─────────────────────────────────────────────────────────────────
+// Nota: O fix de atrasoMedio está dentro de renderRanking().
+// Linha: const atrasoMedio = atrasos.length ? ... : (c.prazo_pagamento_dias || 30);
+// Aplicar manualmente no código principal.
+
+// ─────────────────────────────────────────────────────────────────
+// [C-04] calcApo() — evitar "Infinity anos" com aporte = 0
+// ─────────────────────────────────────────────────────────────────
+function calcApo() {
+  const renda  = parseFloat(document.getElementById('apo-renda').value)  || 15000;
+  const aporte = parseFloat(document.getElementById('apo-aporte').value) || 0;
+  const taxa   = (parseFloat(document.getElementById('apo-taxa').value)  || 10) / 100 / 12;
+  const pat    = parseFloat(document.getElementById('apo-pat').value)    || 0;
+  if (!aporte || aporte <= 0) { toast('Informe um aporte mensal maior que zero'); return; }
+  const meta   = renda * 12 / 0.04;
+  const falta  = Math.max(0, meta - pat);
+  let meses = 0;
+  if (taxa > 0 && aporte > 0) meses = Math.log(1 + (falta * taxa / aporte)) / Math.log(1 + taxa);
+  else if (aporte > 0) meses = falta / aporte;
+  const anos = Math.ceil(meses / 12);
+  const anoApo = new Date().getFullYear() + anos;
+  document.getElementById('apo-anos').textContent = `${anos} anos`;
+  document.getElementById('apo-desc').textContent = `Aposentadoria em ${anoApo} · Patrimônio necessário: ${fmt(meta)} (Regra dos 4% — rende ${fmt(renda)}/mês)`;
+  document.getElementById('apo-res').style.display = 'block';
+  toast('Simulação calculada');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [C-05] verifyFaceID() — fallback automático para PIN
+// ─────────────────────────────────────────────────────────────────
+async function verifyFaceID() {
+  const credId = localStorage.getItem('iryx_faceid');
+  if (!credId) return true;
+  try {
+    const challenge = new Uint8Array(32);
+    crypto.getRandomValues(challenge);
+    const rawId = Uint8Array.from(atob(credId), c => c.charCodeAt(0));
+    await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        allowCredentials: [{id: rawId, type: 'public-key'}],
+        userVerification: 'required',
+        timeout: 60000,
+      }
+    });
+    return true;
+  } catch(e) {
+    if (['NotAllowedError','InvalidStateError','SecurityError'].includes(e.name)) {
+      localStorage.removeItem('iryx_faceid');
+      localStorage.removeItem('iryx_faceid_on');
+      updateFaceIDUI();
+      document.getElementById('pin-login').style.display = 'block';
+      toast('Face ID indisponível — use o PIN para entrar');
+    }
+    return false;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [C-01] nav() com initClinica integrada (sem monkey-patch)
+// ─────────────────────────────────────────────────────────────────
+function nav(p) {
+  document.querySelectorAll('.page').forEach(e => e.classList.remove('on'));
+  document.querySelectorAll('.ni').forEach(e => e.classList.remove('on'));
+  document.getElementById(`page-${p}`)?.classList.add('on');
+  document.querySelectorAll('.ni').forEach(e => {
+    if (e.getAttribute('onclick')?.includes(`'${p}'`)) e.classList.add('on');
+  });
+  if (p === 'dashboard')   renderDash();
+  if (p === 'transactions') renderTx();
+  if (p === 'insights')    renderIns();
+  if (p === 'goals')       renderGoals();
+  if (p === 'budget')      renderBudget();
+  if (p === 'add')         setupAdd();
+  if (p === 'reserva')     renderDist();
+  if (p === 'config')      initConfigPage();
+  if (p === 'analise')    { analMo = curMo; renderAnalise(); }
+  if (p === 'clinica')     initClinica();   // C-01: sem monkey-patch
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [B-01] exportBackupJSON — backup completo de todas as tabelas
+// ─────────────────────────────────────────────────────────────────
+async function exportBackupJSON() {
+  toast('Preparando backup...');
+  try {
+    const [txs, goals, budgets] = await Promise.all([
+      sbGet('iryx_transactions', 'order=date.asc&limit=5000'),
+      sbGet('iryx_goals',        'order=created_at.asc'),
+      sbGet('iryx_budgets',      ''),
+    ]);
+    const backup = {
+      version:     '2.1',
+      exported_at: new Date().toISOString(),
+      app:         APP_NAME,
+      tables: {iryx_transactions: txs, iryx_goals: goals, iryx_budgets: budgets}
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json;charset=utf-8'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `iryx-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`Backup exportado — ${txs.length} transações, ${goals.length} metas`);
+  } catch(e) {
+    toast('Erro no backup: ' + (e.message || 'falha de conexão'));
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [B-02] exportCSV — todos os campos incluindo tags, natureza, id
+// ─────────────────────────────────────────────────────────────────
+async function exportCSV() {
+  await loadTx();
+  const from = document.getElementById('exp-from').value;
+  const to   = document.getElementById('exp-to').value;
+  let txs = allTx.slice();
+  if (from) txs = txs.filter(t => t.date >= from + '-01');
+  if (to)   txs = txs.filter(t => t.date <= to   + '-31');
+  txs.sort((a,b) => a.date.localeCompare(b.date));
+
+  const header = 'ID,Data Caixa,Data Competência,Tipo,Descrição,Categoria,Origem,Conta,Local de Trabalho,Notas,Natureza,Tags,Valor\n';
+  const rows = txs.map(t => [
+    t.id || '',
+    t.date,
+    t.data_competencia || t.date,
+    t.type === 'receita' ? 'Receita' : 'Despesa',
+    '"' + (t.description  || '').replace(/"/g,'""') + '"',
+    getC(t.category).label,
+    t.origin || '',
+    '"' + (t.account       || '') + '"',
+    '"' + (t.work_location || '') + '"',
+    '"' + (t.notes         || '') + '"',
+    t.nature || 'variavel',
+    '"' + (t.tags          || '') + '"',
+    (t.type === 'receita' ? '' : '-') + Number(t.amount).toFixed(2).replace('.', ',')
+  ].join(',')).join('\n');
+
+  const blob = new Blob(['\uFEFF' + header + rows], {type:'text/csv;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  const now  = new Date();
+  a.download = `iryx-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exportado com sucesso');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [P-03] clearLearnedTags — limpar tags aprendidas
+// ─────────────────────────────────────────────────────────────────
+function clearLearnedTags() {
+  if (!confirm('Limpar todas as tags aprendidas? As sugestões voltarão ao padrão.')) return;
+  allKnownTags = [...DEFAULT_TAGS];
+  saveKnownTags();
+  toast('Tags limpas ✓');
+  initConfigPage();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [S-06] exportPDF — sem URL hardcoded
+// ─────────────────────────────────────────────────────────────────
+async function exportPDF() {
+  await loadTx();
+  const from = document.getElementById('exp-from').value;
+  const to   = document.getElementById('exp-to').value;
+  let txs = allTx.slice();
+  if (from) txs = txs.filter(t => t.date >= from + '-01');
+  if (to)   txs = txs.filter(t => t.date <= to   + '-31');
+  txs.sort((a,b) => a.date.localeCompare(b.date));
+  const rec = txs.filter(t=>t.type==='receita').reduce((s,t)=>s+Number(t.amount),0);
+  const des = txs.filter(t=>t.type==='despesa').reduce((s,t)=>s+Number(t.amount),0);
+  const periodo = (from||'—') + ' a ' + (to||'—');
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>${APP_NAME} — Relatório</title>
+<style>body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#2C2420;padding:32px;max-width:900px;margin:0 auto}
+h1{font-size:24px;font-weight:300;color:#9D7982}.sub{font-size:11px;color:#8C7D74;margin-bottom:24px;text-transform:uppercase;letter-spacing:.1em}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}.kpi{background:#F5F1EE;border-radius:8px;padding:14px 16px}
+.kpi-l{font-size:10px;text-transform:uppercase;color:#8C7D74;margin-bottom:5px}.kpi-v{font-size:20px;font-family:monospace}
+.pos{color:#5A8A6A}.neg{color:#733236}.neu{color:#8BA4B3}
+table{width:100%;border-collapse:collapse;font-size:12px}th{background:#F5F1EE;padding:8px 10px;text-align:left;font-size:10px;color:#8C7D74;text-transform:uppercase}
+td{padding:8px 10px;border-bottom:1px solid #EDE8E4}.footer{margin-top:24px;font-size:10px;color:#B0A49C;text-align:center}
+@media print{body{padding:0}}</style></head><body>
+<h1>${APP_NAME} — Relatório</h1>
+<div class="sub">Período: ${periodo} · Gerado em ${new Date().toLocaleDateString('pt-BR')}</div>
+<div class="kpis">
+<div class="kpi"><div class="kpi-l">Total Receitas</div><div class="kpi-v pos">${fmt(rec)}</div></div>
+<div class="kpi"><div class="kpi-l">Total Despesas</div><div class="kpi-v neg">${fmt(des)}</div></div>
+<div class="kpi"><div class="kpi-l">Saldo</div><div class="kpi-v neu">${fmt(rec-des)}</div></div>
+</div>
+<table><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Categoria</th><th>Origem</th><th style="text-align:right">Valor</th></tr></thead>
+<tbody>${txs.map(t=>`<tr>
+<td>${fmtD(t.date)}</td>
+<td style="color:${t.type==='receita'?'#5A8A6A':'#733236'}">${t.type==='receita'?'↑ Receita':'↓ Despesa'}</td>
+<td>${esc(t.description)}</td>
+<td>${esc(getC(t.category).label)}</td>
+<td>${esc(t.origin||'')}</td>
+<td style="text-align:right;font-family:monospace;color:${t.type==='receita'?'#5A8A6A':'#733236'}">${t.type==='receita'?'+':'-'}${fmt(t.amount)}</td>
+</tr>`).join('')}</tbody></table>
+<div class="footer">${APP_NAME} · ${new Date().getFullYear()}</div>
+<script>window.onload=()=>{window.print()}<\/script>
+</body></html>`);
+  win.document.close();
+  toast('Abrindo PDF para impressão...');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [S-06b] Notificações — sem URL hardcoded
+// ─────────────────────────────────────────────────────────────────
+async function setupNotifications() {
+  if (!('Notification' in window)) { toast('Seu navegador não suporta notificações'); return; }
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') {
+    localStorage.setItem('iryx_notif', '1');
+    updateNotifUI();
+    toast('Notificações ativadas');
+    new Notification(APP_NAME, {body: 'Notificações ativadas com sucesso!'});
+  } else { toast('Permissão de notificação negada'); }
+}
+
+function sendBudgetAlert(catLabel, pct) {
+  if (Notification.permission !== 'granted') return;
+  new Notification(APP_NAME + ' · Orçamento', {
+    body: catLabel + ': ' + pct + '% do limite mensal utilizado'
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [P-03c] initConfigPage atualizado com contagem de tags
+// ─────────────────────────────────────────────────────────────────
+function initConfigPage() {
+  updateFaceIDUI();
+  updateNotifUI();
+  const tagsCountEl = document.getElementById('tags-count');
+  if (tagsCountEl) {
+    loadKnownTags();
+    tagsCountEl.textContent = `${allKnownTags.length} tag${allKnownTags.length!==1?'s':''} armazenada${allKnownTags.length!==1?'s':''}`;
+  }
+  const now = new Date();
+  const mo  = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  const fromEl = document.getElementById('exp-from');
+  const toEl   = document.getElementById('exp-to');
+  if (fromEl && !fromEl.value) fromEl.value = mo;
+  if (toEl   && !toEl.value)   toEl.value   = mo;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [S-03] resetSupabase — limpar também chaves novas
+// ─────────────────────────────────────────────────────────────────
+function resetSupabase() {
+  if (!confirm('Isso vai limpar o PIN e pedir suas credenciais novamente. Continuar?')) return;
+  ['iu','ik','ik_enc','iryx_pin','iryx_pin_salt','iryx_faceid','iryx_faceid_on'].forEach(k => localStorage.removeItem(k));
+  SB_URL = ''; KEY = '';
+  location.reload();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FIM DO BLOCO DE CORREÇÕES v2.1
+// ═══════════════════════════════════════════════════════════════════
+
 </script>
 </body>
 </html>
