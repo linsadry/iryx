@@ -8,7 +8,6 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
 
@@ -22,82 +21,30 @@ jobs:
           SB_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           mkdir -p backups
-
-          curl -sf "$SB_URL/rest/v1/iryx_transactions?order=date.asc&limit=9999" \
-            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
-            -o /tmp/transactions.json
-
-          curl -sf "$SB_URL/rest/v1/iryx_goals?order=created_at.asc" \
-            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
-            -o /tmp/goals.json
-
-          curl -sf "$SB_URL/rest/v1/iryx_budgets" \
-            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
-            -o /tmp/budgets.json
-
-          curl -sf "$SB_URL/rest/v1/iryx_clinicas?order=nome.asc" \
-            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
-            -o /tmp/clinicas.json
-
-          curl -sf "$SB_URL/rest/v1/iryx_turnos?order=data.asc&limit=9999" \
-            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
-            -o /tmp/turnos.json
-
           DATE=$(date +%Y-%m-%d)
-          python3 - "$DATE" << 'PYEOF'
-import json, sys
+          echo $DATE > /tmp/backup_date.txt
 
-date = sys.argv[1]
+          curl -sf "$SB_URL/rest/v1/iryx_transactions?order=date.asc&limit=9999"             -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY"             -o /tmp/tx.json
 
-def load(path):
-    try:
-        with open(path) as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
-    except Exception as e:
-        print(f"Aviso: erro ao ler {path}: {e}")
-        return []
+          curl -sf "$SB_URL/rest/v1/iryx_goals?order=created_at.asc"             -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY"             -o /tmp/goals.json
 
-transactions = load('/tmp/transactions.json')
-goals        = load('/tmp/goals.json')
-budgets      = load('/tmp/budgets.json')
-clinicas     = load('/tmp/clinicas.json')
-turnos       = load('/tmp/turnos.json')
+          curl -sf "$SB_URL/rest/v1/iryx_budgets"             -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY"             -o /tmp/budgets.json
 
-backup = {
-    'version':     '2.1',
-    'exported_at': date,
-    'tables': {
-        'iryx_transactions': transactions,
-        'iryx_goals':        goals,
-        'iryx_budgets':      budgets,
-        'iryx_clinicas':     clinicas,
-        'iryx_turnos':       turnos,
-    }
-}
+          curl -sf "$SB_URL/rest/v1/iryx_clinicas?order=nome.asc"             -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY"             -o /tmp/clinicas.json
 
-outpath = f'backups/{date}.json'
-with open(outpath, 'w', encoding='utf-8') as f:
-    json.dump(backup, f, ensure_ascii=False, indent=2)
+          curl -sf "$SB_URL/rest/v1/iryx_turnos?order=data.asc&limit=9999"             -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY"             -o /tmp/turnos.json
 
-print(f"Backup gerado: {outpath}")
-print(f"  transacoes : {len(transactions)}")
-print(f"  goals      : {len(goals)}")
-print(f"  budgets    : {len(budgets)}")
-print(f"  clinicas   : {len(clinicas)}")
-print(f"  turnos     : {len(turnos)}")
-PYEOF
+          python3 .github/scripts/merge_backup.py
 
-      - name: Commit e push do backup
+      - name: Commit e push
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git rm --ignore-unmatch backups/unknown.json
           git add backups/
           if git diff --staged --quiet; then
-            echo "Nenhuma alteracao."
+            echo "Sem alteracoes."
           else
             git commit -m "backup: $(date +%Y-%m-%d)"
             git push
-            echo "Backup commitado."
           fi
