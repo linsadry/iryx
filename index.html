@@ -5,7 +5,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Iryx · Finanças</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
 // ═ ═════════════════════════════════════
 // MÓDULO CLÍNICAS
 // ═ ═════════════════════════════════════
@@ -2024,7 +2025,7 @@ const CATS_REC=[
   {id:'outros-rec',label:'Outros',ic:'·',color:'#9C8AB3'},
 ];
 const KW={alimentacao:['restaurante','lanche','ifood','rappi','pizza','sushi','padaria','cafe','mcdonalds','burger','delivery'],supermercado:['supermercado','mercado','carrefour','extra','pao de acucar','atacadao'],farmacia:['farmacia','drogaria','ultrafarma','droga raia','pacheco'],saude:['hospital','clinica','medico','consulta','exame','laboratorio','unimed','amil','odonto','dentista','fisio','fertiliz'],transporte:['uber','99 ','gasolina','combustivel','estacionamento','pedagio'],moradia:['aluguel','condominio','energia','agua','gas','internet','telefone'],educacao:['curso','livro','escola','faculdade','estrategia','tec concursos','udemy'],tecnologia:['apple','amazon','google','microsoft','spotify','netflix','icloud','adobe'],vestuario:['zara','hm ','renner','riachuelo','cea ','marisa','shein'],beleza:['salao','cabeleireiro','estetica','manicure','spa','perfume','sephora'],lazer:['cinema','teatro','parque','viagem','hotel','airbnb']};
-function catOf(d){const s=d.toLowerCase().normalize('NFD').replace(/[\Ĭ-\$f]/g,'');for(const[c,ks]of Object.entries(KW))if(ks.some(k=>s.includes(k)))return c;return'outros';}
+function catOf(d){const s=d.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');for(const[c,ks]of Object.entries(KW))if(ks.some(k=>s.includes(k)))return c;return'outros';}
 function getC(id){return[...CATS_DES,...CATS_REC].find(c=>c.id===id)||CATS_DES[CATS_DES.length-1];}
 
 // ═ ═════════════════════════════════════
