@@ -409,12 +409,6 @@ async function launchReceita(turno){
   await loadTx();
 }
 
-// ─ ─ Hook no nav ─────────────────────────────────────────────────
-const _origNav = nav;
-window.nav = function(p){
-  _origNav(p);
-  if(p==='clinica') initClinica();
-};
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -2079,6 +2073,7 @@ function nav(p){
   if(p==='reserva')renderDist();
   if(p==='config')initConfigPage();
   if(p==='analise'){analMo=curMo;renderAnalise();}
+  if(p==='clinica')initClinica();
 }
 
 // ═ ═════════════════════════════════════
@@ -2555,23 +2550,31 @@ function isDuplicateTx(t) {
 }
 
 function showPR(txs,bank){
-  const dupCount = txs.filter(t => isDuplicateTx(t)).length;
-  document.getElementById('rescnt').textContent=`${txs.length} transação${txs.length!==1?'ões':''}`;
+  var dupCount=txs.filter(function(t){return isDuplicateTx(t);}).length;
+  document.getElementById('rescnt').textContent=txs.length+' transaç'+(txs.length!==1?'ões':'ão');
   document.getElementById('resbank').textContent=bank;
-  // Banner de aviso de duplicatas
-  const dcEl = document.getElementById('dupcnt');
+  var dcEl=document.getElementById('dupcnt');
   if(dcEl){
-    dcEl.innerHTML = dupCount>0
-      ? `<div class="dup-warn">⚠ ${dupCount} possível${dupCount>1?'eis':'} duplicata${dupCount>1?'s':''} detectada${dupCount>1?'s':''} — desmarcada${dupCount>1?'s':''} automaticamente</div>`
-      : '';
+    if(dupCount>0){
+      var pl=dupCount>1;
+      dcEl.innerHTML='<div class="dup-warn">⚠ '+dupCount+' possív'+(pl?'eis':'el')+' duplicata'+(pl?'s':'')+' detectada'+(pl?'s':'')+' — desmarcada'+(pl?'s':'')+' automaticamente</div>';
+    }else{dcEl.innerHTML='';}
   }
-  document.getElementById('pdftb').innerHTML=txs.map((t,i)=>{
-    const dup = isDuplicateTx(t);
-    const checked = dup ? '' : (t.checked ? 'checked' : '');
-    return `<tr class="${dup?'dup-row':''}"><td><input type="checkbox" id="pc${i}" ${checked}></td><td class="mn">${fmtD(t.date)}</td><td>${t.description}${dup?'<span class="dup-bdg">já existe</span>':''}</td>
-  <td><select id="pcat${i}" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--r);padding:3px 7px;font-size:10.5px;color:var(--text);outline:none">${CATS_DES.map(c=>`<option value="${c.id}" ${c.id===t.category?'selected':''}>${c.label}</option>`).join('')}</select></td>
-  <td style="text-align:right" class="${dup?'mn':'aneg'}">− ${fmt(t.amount)}</td></tr>`;
-  }).join('');
+  var rows='';
+  for(var i=0;i<txs.length;i++){
+    var t=txs[i];
+    var dup=isDuplicateTx(t);
+    var chk=dup?'':(t.checked?'checked':'');
+    var opts=CATS_DES.map(function(c){return '<option value="'+c.id+'"'+(c.id===t.category?' selected':'')+'>'+c.label+'</option>';}).join('');
+    rows+='<tr'+(dup?' class="dup-row"':'')+'>'
+      +'<td><input type="checkbox" id="pc'+i+'" '+chk+'></td>'
+      +'<td class="mn">'+fmtD(t.date)+'</td>'
+      +'<td>'+t.description+(dup?'<span class="dup-bdg">já existe</span>':'')+'</td>'
+      +'<td><select id="pcat'+i+'" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--r);padding:3px 7px;font-size:10.5px;color:var(--text);outline:none">'+opts+'</select></td>'
+      +'<td style="text-align:right" class="'+(dup?'mn':'aneg')+'">− '+fmt(t.amount)+'</td>'
+      +'</tr>';
+  }
+  document.getElementById('pdftb').innerHTML=rows;
   document.getElementById('pdfres').style.display='block';
 }
 function tglAll(cb){document.querySelectorAll('[id^="pc"]').forEach(c=>c.checked=cb.checked);}
