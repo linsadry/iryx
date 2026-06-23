@@ -970,6 +970,44 @@ tbody tr:hover td{background:#faf8f6}
         </div>
       </div>
 
+      <!-- ── NOVA HOME · Decisão ── -->
+      <div class="g g4" style="margin-bottom:14px">
+
+        <!-- Card 1: Saúde Financeira (Score) -->
+        <div class="card" style="position:relative">
+          <div class="cl">Saúde financeira</div>
+          <div id="h-score-val" class="cv pos" style="font-size:26px;margin:4px 0">—</div>
+          <div class="cd" id="h-score-delta" style="margin-top:2px"></div>
+        </div>
+
+        <!-- Card 2: Próxima Prioridade -->
+        <div class="card" onclick="nav('goals')" style="cursor:pointer">
+          <div class="cl">Próxima prioridade ↗</div>
+          <div id="h-priority-name" style="font-size:13px;color:var(--t2);font-weight:600;margin:6px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
+          <div class="pb" style="margin-bottom:5px"><div class="pf" id="h-priority-bar" style="width:0%"></div></div>
+          <div class="cd" id="h-priority-sub"></div>
+        </div>
+
+        <!-- Card 3: Dinheiro Livre -->
+        <div class="card">
+          <div class="cl">Dinheiro livre</div>
+          <div id="h-free-val" class="cv pos" style="font-size:22px;margin:4px 0">R$ —</div>
+          <div class="cd" id="h-free-sub" style="font-size:10px">receita − necessidades</div>
+        </div>
+
+        <!-- Card 4: Vitória do mês -->
+        <div class="card">
+          <div class="cl">Vitória do mês ✦</div>
+          <div id="h-victory-val" style="font-size:12.5px;color:var(--sage);font-weight:600;margin-top:7px;line-height:1.45">—</div>
+        </div>
+      </div>
+
+      <!-- Alertas da Home (max 3) -->
+      <div id="home-alerts-wrap" style="display:none;margin-bottom:14px">
+        <div class="sech" style="margin-bottom:8px"><div class="sect">Alertas</div></div>
+        <div id="home-alerts" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+
       <!-- KPIs -->
       <div class="g g4">
         <div class="card"><div class="cl">Receitas do mês</div><div class="cv pos" id="k-rec">R$ 0</div><div class="cd" id="k-rec-d"></div></div>
@@ -998,11 +1036,20 @@ tbody tr:hover td{background:#faf8f6}
         </div>
       </div>
 
+      <!-- Orçamento Vivo na Home -->
+      <div class="sec" id="home-budget-section" style="display:none;padding:16px 20px">
+        <div class="sech" style="margin-bottom:10px">
+          <div class="sect">Orçamento do mês</div>
+          <button class="btn bg" style="font-size:11px;padding:4px 9px" onclick="nav('budget')">Editar →</button>
+        </div>
+        <div id="home-budbars"></div>
+      </div>
+
       <!-- Charts + Score -->
       <div class="sec">
         <div class="g" style="grid-template-columns:1fr 1fr 260px">
           <div class="chw"><div class="cht">Receita × Despesa  últimos 6 meses</div><canvas id="ch-rdm" height="200"></canvas></div>
-          <div class="chw"><div class="cht">Gastos por categoria</div><canvas id="ch-cat" height="200"></canvas></div>
+          <div class="chw"><div class="cht">Ranking de categorias</div><div id="cat-ranking" style="min-height:180px;overflow:auto"></div></div>
           <div class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
             <div class="cl" style="margin-bottom:12px">Score financeiro</div>
             <div class="score-wrap">
@@ -1073,6 +1120,9 @@ tbody tr:hover td{background:#faf8f6}
         </div>
       </div>
     </div>
+
+      <!-- Mini-Insights da Home -->
+      <div id="home-insights-wrap" style="display:none"></div>
 
     <!-- ═ ═ TRANSACTIONS ══ -->
     <div class="page" id="page-transactions">
@@ -2026,7 +2076,7 @@ function getC(id){return[...CATS_DES,...CATS_REC].find(c=>c.id===id)||CATS_DES[C
 // STATE
 // ═ ═════════════════════════════════════
 let curMo='',allTx=[],selCat='',txType='despesa',editTxType='despesa';
-let chRDM,chCat;
+let chRDM,chCat; // chCat kept for compat; rendering now via renderCatRanking
 let calcHist=[];
 
 function nowMo(){const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;}
@@ -2116,13 +2166,19 @@ async function renderDash(){
   updM();
 
   renderRDMChart();
-  renderCatChart(txM);
+  renderCatRanking(txM);
   renderScore(rec,des,poup,allTx);
   renderRecTb(txM.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8));
   renderDashGoalStatus();
   renderAllocPanel();
   checkBudgetAlerts();
   renderDashNat(txM);
+  // ── Fase 1 additions ──
+  const _bdgH=await sbGet('iryx_budgets','').catch(()=>[]);
+  await renderHomeDecision(txM,rec,des);
+  renderHomeAlerts(txM,_bdgH);
+  renderHomeBudgetBars(txM,_bdgH);
+  renderHomeInsights(txM,_bdgH);
 }
 
 function renderRDMChart(){
@@ -3727,6 +3783,204 @@ async function initApp(){
   bnav('dashboard');
   await renderDash();
 }
+
+// ═══════════════════════════════════════════════════════════
+// FASE 1 – HOME ESTRATÉGICA
+// ═══════════════════════════════════════════════════════════
+
+// ── 1. Ranking de categorias (substitui pizza) ──────────────
+function renderCatRanking(txM){
+  const el=document.getElementById('cat-ranking');
+  if(!el)return;
+  const des=txM.filter(t=>t.type==='despesa');
+  const total=des.reduce((s,t)=>s+Number(t.amount),0);
+  const bc={};des.forEach(t=>{bc[t.category]=(bc[t.category]||0)+Number(t.amount);});
+  const sorted=Object.entries(bc).sort((a,b)=>b[1]-a[1]).slice(0,7);
+  if(!sorted.length){el.innerHTML='<div style="color:var(--t4);font-size:12px;padding:24px 0;text-align:center">Sem despesas no período</div>';return;}
+  el.innerHTML=sorted.map(([cid,val],i)=>{
+    const c=getC(cid),pct=total>0?Math.round(val/total*100):0;
+    return`<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--t4);font-family:'DM Mono',monospace;width:18px;flex-shrink:0">${i+1}º</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="font-size:12px;color:var(--t2)">${esc(c.ic+' '+c.label)}</span>
+          <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--t1)">${fmt(val)}</span>
+        </div>
+        <div style="height:3px;background:var(--border);border-radius:2px">
+          <div style="height:3px;width:${pct}%;background:${c.color};border-radius:2px;transition:width .5s ease"></div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--t4);width:28px;text-align:right">${pct}%</div>
+    </div>`;
+  }).join('');
+}
+
+// ── 2. Decisão: Score, Prioridade, Dinheiro Livre, Vitória ──
+async function renderHomeDecision(txM,rec,des){
+  try{
+    // ── Score atual ──
+    const poup=rec>0?Math.round((rec-des)/rec*100):0;
+    let score=0;
+    if(poup>=30)score+=40;else if(poup>=20)score+=30;else if(poup>=10)score+=20;else if(poup>0)score+=10;
+    const meses=new Set(allTx.map(t=>t.date.substring(0,7))).size;
+    score+=meses>=6?30:Math.round(meses/6*30);
+    if(des>0&&rec>0){const rat=des/rec;if(rat<=0.5)score+=30;else if(rat<=0.7)score+=20;else if(rat<=0.9)score+=10;}
+
+    // ── Score mês anterior ──
+    const[y,m]=curMo.split('-').map(Number);
+    const pv=new Date(y,m-2,1);const pm=`${pv.getFullYear()}-${String(pv.getMonth()+1).padStart(2,'0')}`;
+    const txP=allTx.filter(t=>t.date.startsWith(pm));
+    const pr=txP.filter(t=>t.type==='receita').reduce((s,t)=>s+Number(t.amount),0);
+    const pd=txP.filter(t=>t.type==='despesa').reduce((s,t)=>s+Number(t.amount),0);
+    let prevScore=0;
+    if(pr>0){const pp=Math.round((pr-pd)/pr*100);
+      if(pp>=30)prevScore+=40;else if(pp>=20)prevScore+=30;else if(pp>=10)prevScore+=20;else if(pp>0)prevScore+=10;
+      prevScore+=meses>=6?30:Math.round(meses/6*30);
+      if(pd>0&&pr>0){const rat=pd/pr;if(rat<=0.5)prevScore+=30;else if(rat<=0.7)prevScore+=20;else if(rat<=0.9)prevScore+=10;}
+    }
+    const sv=document.getElementById('h-score-val');
+    if(sv){sv.textContent=score+' pts';sv.className='cv '+(score>=70?'pos':score>=50?'acc':'neg');}
+    const sd=document.getElementById('h-score-delta');
+    if(sd&&pr>0){const diff=score-prevScore;sd.textContent=(diff>=0?'+':'')+diff+' vs mês anterior';}
+
+    // ── Próxima prioridade ──
+    const goals=await sbGet('iryx_goals').catch(()=>[]);
+    if(goals.length){
+      const top=goals.filter(g=>g.target>0).sort((a,b)=>a.priority-b.priority)[0];
+      if(top){
+        const pct=Math.min(100,Math.round(top.current/top.target*100));
+        const el_n=document.getElementById('h-priority-name');
+        const el_b=document.getElementById('h-priority-bar');
+        const el_s=document.getElementById('h-priority-sub');
+        if(el_n)el_n.textContent=top.name;
+        if(el_b)el_b.style.width=pct+'%';
+        if(el_s)el_s.textContent=`${fmt(top.current)} / ${fmt(top.target)} · ${pct}%`;
+      }
+    }
+
+    // ── Dinheiro livre ──
+    // Necessidades = fixos + categorias essenciais
+    const nec=txM.filter(t=>t.type==='despesa'&&(t.nature==='fixo'||['moradia','saude','alimentacao','supermercado','farmacia'].includes(t.category))).reduce((s,t)=>s+Number(t.amount),0);
+    const necEst=nec>0?nec:des*0.6;
+    const livre=rec-necEst;
+    const fv=document.getElementById('h-free-val');
+    const fs=document.getElementById('h-free-sub');
+    if(fv){fv.textContent=fmt(livre);fv.className='cv '+(livre>=0?'pos':'neg');}
+    if(fs)fs.textContent=`Receita ${fmt(rec)} − necessidades ${fmt(necEst)}`;
+
+    // ── Vitória do mês ──
+    const vv=document.getElementById('h-victory-val');
+    if(vv){
+      const poupp=pr>0?Math.round((pr-pd)/pr*100):0;
+      let vitoria='Lance transações para ver suas conquistas';
+      if(rec>0){
+        if(score>prevScore&&pr>0)vitoria=`Score subiu ${score-prevScore} pontos vs mês anterior 📈`;
+        else if(des<pd&&pd>0)vitoria=`Gastos ${fmt(pd-des)} menores que mês anterior 🎯`;
+        else if(poup>=20)vitoria=`Taxa de poupança de ${poup}% — acima da meta de 20% ✓ `;
+        else if(rec>pr&&pr>0)vitoria=`Receita cresceu ${fmt(rec-pr)} vs mês anterior`;
+        else vitoria=`${txM.length} transações registradas · ${fmt(rec)} em receitas`;
+      }
+      vv.textContent=vitoria;
+    }
+  }catch(e){console.warn('renderHomeDecision:',e);}
+}
+
+// ── 3. Alertas inteligentes (max 3) ─────────────────────────
+function renderHomeAlerts(txM,budgets){
+  const alerts=[];
+  const bc={};
+  txM.filter(t=>t.type==='despesa').forEach(t=>{bc[t.category]=(bc[t.category]||0)+Number(t.amount);});
+  const rec=txM.filter(t=>t.type==='receita').reduce((s,t)=>s+Number(t.amount),0);
+  const des=txM.filter(t=>t.type==='despesa').reduce((s,t)=>s+Number(t.amount),0);
+
+  // Alerta: categorias acima de 80% do orçamento
+  for(const b of budgets){
+    const sp=bc[b.category]||0,pct=Math.round(sp/b.monthly_limit*100);
+    if(pct>=90)alerts.push({ic:'⚠️',txt:`${getC(b.category).label} em ${pct}% do limite (${fmt(sp)} / ${fmt(b.monthly_limit)})`});
+  }
+
+  // Alerta: categorias que cresceram >25% vs 2 meses atrás
+  const[y,m]=curMo.split('-').map(Number);
+  const p2=new Date(y,m-3,1);const pm2=`${p2.getFullYear()}-${String(p2.getMonth()+1).padStart(2,'0')}`;
+  const bc2={};
+  allTx.filter(t=>t.date.startsWith(pm2)&&t.type==='despesa').forEach(t=>{bc2[t.category]=(bc2[t.category]||0)+Number(t.amount);});
+  for(const[cat,val]of Object.entries(bc)){
+    const prev=bc2[cat]||0;
+    if(prev>0&&val>prev*1.25&&val>100)alerts.push({ic:'📈',txt:`${getC(cat).label} subiu ${Math.round((val-prev)/prev*100)}% vs 2 meses atrás`});
+  }
+
+  // Alerta: nenhum aporte no mês
+  const aportes=txM.filter(t=>t.type==='receita'&&(t.tags||'').includes('aporte')).length;
+  if(rec>0&&aportes===0)alerts.push({ic:'💡',txt:'Nenhum aporte registrado este mês — lembre-se das metas'});
+
+  // Alerta: poupança abaixo de 10%
+  const poup=rec>0?Math.round((rec-des)/rec*100):0;
+  if(rec>0&&poup<10)alerts.push({ic:'🔴',txt:`Taxa de poupança em ${poup}% — abaixo do mínimo recomendado (10%)`});
+
+  const wrap=document.getElementById('home-alerts-wrap');
+  const box=document.getElementById('home-alerts');
+  if(!wrap||!box)return;
+  const top3=alerts.slice(0,3);
+  if(top3.length){
+    box.innerHTML=top3.map(a=>`<div style="display:flex;align-items:flex-start;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px">
+      <span style="font-size:13px;flex-shrink:0">${a.ic}</span>
+      <span style="font-size:12px;color:var(--t2);line-height:1.4">${esc(a.txt)}</span>
+    </div>`).join('');
+    wrap.style.display='block';
+  }else{wrap.style.display='none';}
+}
+
+// ── 4. Orçamento Vivo na Home ────────────────────────────────
+function renderHomeBudgetBars(txM,budgets){
+  const sec=document.getElementById('home-budget-section');
+  const el=document.getElementById('home-budbars');
+  if(!sec||!el)return;
+  const wb=budgets.filter(b=>b.monthly_limit>0);
+  if(!wb.length){sec.style.display='none';return;}
+  const bc={};txM.filter(t=>t.type==='despesa').forEach(t=>{bc[t.category]=(bc[t.category]||0)+Number(t.amount);});
+  sec.style.display='block';
+  const sorted=wb.sort((a,b)=>{
+    const pa=(bc[a.category]||0)/a.monthly_limit;
+    const pb=(bc[b.category]||0)/b.monthly_limit;
+    return pb-pa; // mais consumido primeiro
+  });
+  const cols=Math.min(2,Math.ceil(sorted.length/3));
+  el.style.cssText=`display:grid;grid-template-columns:repeat(${cols},1fr);gap:10px 20px`;
+  el.innerHTML=sorted.map(b=>{
+    const c=getC(b.category),sp=bc[b.category]||0,lim=b.monthly_limit;
+    const pct=Math.min(100,Math.round(sp/lim*100));
+    const col=pct>=100?'var(--wine)':pct>=80?'#c97a30':'var(--sage)';
+    return`<div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:12px;color:var(--t2)">${esc(c.ic+' '+c.label)}</span>
+        <span style="font-size:10.5px;font-family:'DM Mono',monospace;color:${col}">${fmt(sp)} / ${fmt(lim)}</span>
+      </div>
+      <div class="pb"><div class="pf ${pct>=100?'ov':''}" style="width:${pct}%;background:${col}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+// ── 5. Mini-Insights na Home (max 3, baseado em regras) ──────
+function renderHomeInsights(txM,budgets){
+  // Reutiliza genIns existente, mostra no máximo 3 na home
+  const el=document.getElementById('home-insights-wrap');
+  if(!el)return;
+  if(allTx.length<5){el.style.display='none';return;}
+  const ins=genIns(allTx,budgets).slice(0,3);
+  if(!ins.length){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML=`<div class="sec" style="padding:16px 20px">
+    <div class="sech" style="margin-bottom:10px">
+      <div class="sect">Insights automáticos</div>
+      <button class="btn bg" style="font-size:11px;padding:4px 9px" onclick="nav('insights')">Ver todos →</button>
+    </div>
+    ${ins.map(i=>`<div class="ins ${i.t}" style="margin-bottom:8px"><div class="inst">${esc(i.title)}</div><div class="insb">${esc(i.body)}</div></div>`).join('')}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// FIM FASE 1
+// ═══════════════════════════════════════════════════════════
 </script>
 </body>
 </html>
