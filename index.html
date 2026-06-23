@@ -933,9 +933,14 @@ tbody tr:hover td{background:#faf8f6}
     </div>
     <div class="ng" style="margin-top:6px">
       <div class="ngl">Planejamento</div>
+      <div class="ni" onclick="nav('patrimonio')"><span class="nic">◧ </span>Patrimônio</div>
       <div class="ni" onclick="nav('goals')"><span class="nic">◎ </span>Metas</div>
       <div class="ni" onclick="nav('budget')"><span class="nic">▦ </span>Orçamento</div>
       <div class="ni" onclick="nav('reserva')"><span class="nic">⬡ </span>Reserva & Apo.</div>
+      <div class="ni" onclick="nav('revisao')" style="position:relative">
+        <span class="nic">⚑ </span>Revisão
+        <span id="revisao-badge" style="display:none;background:var(--wine);color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:auto"></span>
+      </div>
     </div>
     <div class="ng" style="margin-top:6px">
       <div class="ngl">Ferramentas</div>
@@ -1124,7 +1129,62 @@ tbody tr:hover td{background:#faf8f6}
       <!-- Mini-Insights da Home -->
       <div id="home-insights-wrap" style="display:none"></div>
 
-    <!-- ═ ═ TRANSACTIONS ══ -->
+      <!-- Fluxo de Dinheiro -->
+      <div class="sec" id="home-fluxo-section" style="display:none;padding:16px 20px">
+        <div class="sech" style="margin-bottom:14px">
+          <div class="sect">Fluxo do dinheiro</div>
+          <div class="cd" style="font-size:10.5px">Receita → Alocações → Saldo livre</div>
+        </div>
+        <div id="home-fluxo"></div>
+      </div>
+
+    <!-- ═ ═ REVISÃO ══ -->
+    <div class="page" id="page-revisao">
+      <div class="ph">
+        <h1 class="pt">Central de <em>Revisão</em></h1>
+        <p class="ps">Classificar e criar memória de comerciantes</p>
+      </div>
+      <div id="revisao-content"></div>
+    </div>
+
+    <!-- ═ ═ PATRIMÔNIO ══ -->
+    <div class="page" id="page-patrimonio">
+      <div class="ph">
+        <div class="row">
+          <div class="f1"><h1 class="pt">Patri<em>mônio</em></h1><p class="ps">Horizonte temporal de metas</p></div>
+          <button class="btn bp" onclick="openGoalMod()">+ Nova meta</button>
+        </div>
+      </div>
+      <!-- Tabs -->
+      <div style="display:flex;gap:8px;padding:0 24px 16px">
+        <button class="btn bp" id="pat-tab-metas" onclick="patTab('metas')">Metas</button>
+        <button class="btn bg" id="pat-tab-timeline" onclick="patTab('timeline')">Linha do Tempo</button>
+      </div>
+      <!-- Metas por horizonte -->
+      <div id="pat-metas">
+        <div class="sec" style="padding:16px 24px">
+          <div class="sech"><div class="sect">⚡ Curto prazo</div><div class="cd">até 1 ano</div></div>
+          <div class="g g3" id="pat-curto" style="margin-top:12px"></div>
+        </div>
+        <div class="sec" style="padding:16px 24px">
+          <div class="sech"><div class="sect">◉ Médio prazo</div><div class="cd">1 – 3 anos</div></div>
+          <div class="g g3" id="pat-medio" style="margin-top:12px"></div>
+        </div>
+        <div class="sec" style="padding:16px 24px">
+          <div class="sech"><div class="sect">◎ Longo prazo</div><div class="cd">3+ anos ou sem prazo definido</div></div>
+          <div class="g g3" id="pat-longo" style="margin-top:12px"></div>
+        </div>
+      </div>
+      <!-- Timeline -->
+      <div id="pat-timeline" style="display:none">
+        <div style="padding:0 24px 16px;display:flex;justify-content:flex-end">
+          <button class="btn bp" onclick="openTimelineMod()">+ Registrar marco</button>
+        </div>
+        <div id="timeline-list" style="padding:0 24px 40px"></div>
+      </div>
+    </div>
+
+    <!-- ═ ═ TRANSACTIONS ══
     <div class="page" id="page-transactions">
       <div class="ph">
         <div class="row">
@@ -1568,6 +1628,22 @@ tbody tr:hover td{background:#faf8f6}
       </div>
     </div>
   </main>
+
+  <!-- MODAL: Timeline -->
+  <div class="mod" id="mod-timeline" style="display:none" onclick="if(event.target===this)closeMod('mod-timeline')">
+    <div class="modc" style="max-width:440px">
+      <div class="modh">
+        <div class="modt">Novo marco</div>
+        <button class="modc-x" onclick="closeMod('mod-timeline')">✕</button>
+      </div>
+      <div class="fg">
+        <div class="fld"><label>Título do marco</label><input type="text" id="tl-title" placeholder="Ex: Primeiro aporte, Terreno quitado..."></div>
+        <div class="fld"><label>Data</label><input type="date" id="tl-date"></div>
+        <div class="fld"><label>Observações (opcional)</label><textarea id="tl-notes" rows="3" placeholder="Contexto, valor, emoção..." style="background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--r);padding:10px 12px;color:var(--text);font-family:inherit;font-size:13px;outline:none;width:100%;box-sizing:border-box;resize:vertical"></textarea></div>
+        <button class="btn bp bfull" onclick="saveTimeline()">Registrar marco ✓</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL ALOCAÇÃO -->
@@ -1841,6 +1917,14 @@ tbody tr:hover td{background:#faf8f6}
     <button class="mais-item" onclick="navMais('config')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       Configurações
+    </button>
+    <button class="mais-item" onclick="navMais('patrimonio')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Patrimônio
+    </button>
+    <button class="mais-item" onclick="navMais('revisao')" style="position:relative">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+      Revisão
     </button>
   </div>
 </div>
@@ -2124,6 +2208,8 @@ function nav(p){
   if(p==='config')initConfigPage();
   if(p==='analise'){analMo=curMo;renderAnalise();}
   if(p==='clinica')initClinica();
+  if(p==='patrimonio')renderPatrimonio();
+  if(p==='revisao')renderRevisao();
 }
 
 // ═ ═════════════════════════════════════
@@ -2179,6 +2265,7 @@ async function renderDash(){
   renderHomeAlerts(txM,_bdgH);
   renderHomeBudgetBars(txM,_bdgH);
   renderHomeInsights(txM,_bdgH);
+  renderFluxo(rec,des,txM);
 }
 
 function renderRDMChart(){
@@ -2621,13 +2708,16 @@ function showPR(txs,bank){
     var t=txs[i];
     var dup=isDuplicateTx(t);
     var chk=dup?'':(t.checked?'checked':'');
-    var opts=CATS_DES.map(function(c){return '<option value="'+c.id+'"'+(c.id===t.category?' selected':'')+'>'+c.label+'</option>';}).join('');
-    rows+='<tr'+(dup?' class="dup-row"':'')+'>'
-      +'<td><input type="checkbox" id="pc'+i+'" '+chk+'></td>'
-      +'<td class="mn">'+fmtD(t.date)+'</td>'
-      +'<td>'+t.description+(dup?'<span class="dup-bdg">já existe</span>':'')+'</td>'
-      +'<td><select id="pcat'+i+'" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--r);padding:3px 7px;font-size:10.5px;color:var(--text);outline:none">'+opts+'</select></td>'
-      +'<td style="text-align:right" class="'+(dup?'mn':'aneg')+'">− '+fmt(t.amount)+'</td>'
+    var mem=classifyDescription(t.description);
+    var autocat=mem?mem.category:(t.category||'outros');
+    var opts=CATS_DES.map(function(c){return '<option value="'+c.id+'"'+(c.id===autocat?' selected':'')+'>'+c.label+'</option>';}).join('');
+    var memlbl=mem?'<span style="font-size:9px;color:var(--sage);margin-left:4px">'+(mem.source==='memory'?'◉ memória':'◎ regra')+'</span>':'';
+    rows+='<tr'+(dup?' class="dup-row"':'')+'>'\
+      +'<td><input type="checkbox" id="pc'+i+'" '+chk+'></td>'\
+      +'<td class="mn">'+fmtD(t.date)+'</td>'\
+      +'<td>'+(mem&&mem.friendly?'<b>'+esc(mem.friendly)+'</b> <span style="font-size:10px;color:var(--t4)">'+esc(t.description)+'</span>':esc(t.description))+(dup?'<span class="dup-bdg">já existe</span>':'')+memlbl+'</td>'\
+      +'<td><select id="pcat'+i+'" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--r);padding:3px 7px;font-size:10.5px;color:var(--text);outline:none">'+opts+'</select></td>'\
+      +'<td style="text-align:right" class="'+(dup?'mn':'aneg')+'">− '+fmt(t.amount)+'</td>'\
       +'</tr>';
   }
   document.getElementById('pdftb').innerHTML=rows;
@@ -2643,6 +2733,8 @@ async function importSel(){
     const cat=document.getElementById(`pcat${i}`)?.value||pdfTxs[i].category;
     try{
       await sbPost('iryx_transactions',{type:'despesa',date:pdfTxs[i].date,description:pdfTxs[i].description,amount:pdfTxs[i].amount,category:cat,origin:'card',nature:pdfTxs[i].nature||'variavel',tags:pdfTxs[i].tags||''});
+      // Salvar memória se categoria foi definida manualmente ou por regra
+      saveToMerchantMemory(pdfTxs[i].description,'',cat,'').catch(()=>{});
       cnt++;
     }catch{errs++;}
   }
@@ -3776,6 +3868,7 @@ function resetSupabase(){
 
 async function initApp(){
   loadKnownTags();
+  loadClassification();
   curMo=nowMo();analMo=curMo;updM();setupAdd();
   document.getElementById('fmo').value=curMo;
   document.getElementById('fmo').addEventListener('change',renderTx);
@@ -3980,6 +4073,372 @@ function renderHomeInsights(txM,budgets){
 
 // ═══════════════════════════════════════════════════════════
 // FIM FASE 1
+// ═══════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════
+// FASE 2 – MEMÓRIA DE COMERCIANTES + CENTRAL DE REVISÃO
+// ═══════════════════════════════════════════════════════════
+
+let merchantMemory = [];
+let classRules = [];
+
+// Regras padrão embutidas (sem depender do banco)
+const DEFAULT_RULES = [
+  {keyword:'POSTO',category:'transporte'},{keyword:'SHELL',category:'transporte'},
+  {keyword:'IPIRANGA',category:'transporte'},{keyword:'BR DIST',category:'transporte'},
+  {keyword:'UBER',category:'transporte'},{keyword:'99APP',category:'transporte'},
+  {keyword:'CABIFY',category:'transporte'},{keyword:'ITURAN',category:'transporte'},
+  {keyword:'DROG',category:'farmacia'},{keyword:'FARM',category:'farmacia'},
+  {keyword:'PACHECO',category:'farmacia'},{keyword:'ULTRAFARMA',category:'farmacia'},
+  {keyword:'IFOOD',category:'alimentacao'},{keyword:'RAPPI',category:'alimentacao'},
+  {keyword:'AIQFOME',category:'alimentacao'},{keyword:'MCDONALDS',category:'alimentacao'},
+  {keyword:'BURGER',category:'alimentacao'},{keyword:'SUBWAY',category:'alimentacao'},
+  {keyword:'MERCADO',category:'supermercado'},{keyword:'SUPERM',category:'supermercado'},
+  {keyword:'CARREFOUR',category:'supermercado'},{keyword:'ATACADAO',category:'supermercado'},
+  {keyword:'ASSAI',category:'supermercado'},{keyword:'GPA',category:'supermercado'},
+  {keyword:'AMAZON',category:'lazer'},{keyword:'NETFLIX',category:'lazer'},
+  {keyword:'SPOTIFY',category:'lazer'},{keyword:'DEEZER',category:'lazer'},
+  {keyword:'DISNEY',category:'lazer'},{keyword:'HBO',category:'lazer'},
+  {keyword:'PRIME VIDEO',category:'lazer'},{keyword:'PARAMOUNT',category:'lazer'},
+  {keyword:'APPLE',category:'tecnologia'},{keyword:'GOOGLE',category:'tecnologia'},
+  {keyword:'MICROSOFT',category:'tecnologia'},{keyword:'ADOBE',category:'tecnologia'},
+  {keyword:'CONDOMIN',category:'moradia'},{keyword:'ALUGUEL',category:'moradia'},
+  {keyword:'AGUA',category:'moradia'},{keyword:'LUZ',category:'moradia'},
+  {keyword:'ENERGIA',category:'moradia'},{keyword:'ENEL',category:'moradia'},
+  {keyword:'EMBASA',category:'moradia'},{keyword:'COELBA',category:'moradia'},
+  {keyword:'SALAO',category:'beleza'},{keyword:'CABELEL',category:'beleza'},
+  {keyword:'MANICURE',category:'beleza'},{keyword:'DEPILAC',category:'beleza'},
+  {keyword:'SARAIVA',category:'educacao'},{keyword:'LIVRARIA',category:'educacao'},
+  {keyword:'ESTRATEGIA',category:'educacao'},{keyword:'UDEMY',category:'educacao'},
+  {keyword:'CURSO',category:'educacao'},
+];
+
+async function loadClassification() {
+  try {
+    merchantMemory = await sbGet('merchant_memory','select=*').catch(() => []);
+    classRules = await sbGet('classification_rules','select=*&order=priority.asc').catch(() => []);
+  } catch(e) { merchantMemory = []; classRules = []; }
+}
+
+function classifyDescription(desc) {
+  if (!desc) return null;
+  const upper = desc.toUpperCase().trim();
+  // 1. Exact match in merchant_memory
+  const ex = merchantMemory.find(m => m.merchant_original?.toUpperCase() === upper);
+  if (ex) return {category: ex.category, friendly: ex.merchant_friendly_name, tags: ex.tags, source: 'memory'};
+  // 2. Partial match in merchant_memory (longest match wins)
+  const partials = merchantMemory.filter(m => upper.includes(m.merchant_original?.toUpperCase()));
+  if (partials.length) {
+    const best = partials.sort((a,b) => b.merchant_original.length - a.merchant_original.length)[0];
+    return {category: best.category, friendly: best.merchant_friendly_name, tags: best.tags, source: 'memory'};
+  }
+  // 3. DB classification rules
+  const allRules = [...classRules, ...DEFAULT_RULES];
+  for (const r of allRules) {
+    if (r.keyword && upper.includes(r.keyword.toUpperCase())) {
+      return {category: r.category, friendly: null, tags: null, source: 'rule'};
+    }
+  }
+  return null;
+}
+
+async function saveToMerchantMemory(original, friendly, category, tags) {
+  if (!original || !category) return;
+  try {
+    const key = original.toUpperCase().trim();
+    await fetch(`${SB_URL}/rest/v1/merchant_memory?merchant_original=eq.${encodeURIComponent(key)}`,{method:'DELETE',headers:H()});
+    await sbPost('merchant_memory', {
+      merchant_original: key,
+      merchant_friendly_name: (friendly || original).trim(),
+      category,
+      tags: tags || ''
+    });
+    merchantMemory = merchantMemory.filter(m => m.merchant_original?.toUpperCase() !== key);
+    merchantMemory.push({merchant_original: key, merchant_friendly_name: (friendly||original).trim(), category, tags: tags||''});
+  } catch(e) { console.warn('saveToMerchantMemory:', e); }
+}
+
+// ── Central de Revisão ──────────────────────────────────────
+async function renderRevisao() {
+  const el = document.getElementById('revisao-content');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--t3)">Carregando...</div>';
+  await loadTx();
+  await loadClassification();
+
+  const unclassified = allTx.filter(t =>
+    t.type === 'despesa' && (!t.category || t.category === 'outros' || t.category === '')
+  );
+
+  if (!unclassified.length) {
+    el.innerHTML = `<div style="text-align:center;padding:60px 24px">
+      <div style="font-size:36px;margin-bottom:12px">✓ </div>
+      <div style="font-size:15px;font-weight:600;color:var(--t1)">Tudo classificado!</div>
+      <div style="font-size:13px;color:var(--t3);margin-top:6px">Nenhuma transação aguardando revisão.</div>
+    </div>`;
+    updateRevisaoBadge(0);
+    return;
+  }
+
+  updateRevisaoBadge(unclassified.length);
+  const shown = unclassified.slice(0, 30);
+  const catOpts = CATS_DES.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+
+  el.innerHTML = `
+    <div style="padding:0 24px 16px">
+      <div class="ins info"><div class="insb">
+        <b>${unclassified.length}</b> transaç${unclassified.length!==1?'ões':'ão'} aguardando classificação.
+        Ao classificar, o Iryx reconhecerá automaticamente nas próximas importações.
+      </div></div>
+    </div>
+    ${shown.map(t => {
+      return `<div class="sec" style="padding:14px 20px;margin:0 16px 10px;border-radius:var(--r)" id="rev-item-${t.id}">
+        <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--t1)">${esc(t.description)}</div>
+            <div style="font-size:11px;color:var(--t4)">${fmtD(t.date)} · ${t.type==='despesa'?'−':'+'} ${fmt(t.amount)}</div>
+          </div>
+          <span style="font-size:10px;background:var(--bg3);color:var(--t4);padding:3px 8px;border-radius:10px;height:fit-content">Não classificado</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1;min-width:150px">
+            <div style="font-size:10.5px;color:var(--t3);margin-bottom:4px">Nome amigável</div>
+            <input type="text" id="rev-fn-${t.id}" placeholder="${esc(t.description)}"
+              style="width:100%;box-sizing:border-box;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--r);padding:7px 10px;font-size:12px;color:var(--text);outline:none">
+          </div>
+          <div style="flex:1;min-width:130px">
+            <div style="font-size:10.5px;color:var(--t3);margin-bottom:4px">Categoria</div>
+            <select id="rev-cat-${t.id}"
+              style="width:100%;box-sizing:border-box;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--r);padding:7px 10px;font-size:12px;color:var(--text);outline:none">
+              ${catOpts}
+            </select>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn bp" style="font-size:12px;padding:7px 14px"
+              onclick="classifyAndSave('${t.id}','${t.description.replace(/\/g,'\\').replace(/'/g,"\'").replace(/"/g,'\"')}')">
+              Classificar ✓
+            </button>
+            <button class="btn bg" style="font-size:12px;padding:7px 10px;color:var(--t4)"
+              onclick="skipRevItem('${t.id}')">Pular</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+    ${unclassified.length > 30 ? `<div style="text-align:center;padding:12px;color:var(--t3);font-size:12px">Mostrando 30 de ${unclassified.length}. Classifique e recarregue para ver mais.</div>` : ''}
+  `;
+}
+
+async function classifyAndSave(txId, original) {
+  const friendly = (document.getElementById(`rev-fn-${txId}`)?.value || '').trim() || original;
+  const category = document.getElementById(`rev-cat-${txId}`)?.value || 'outros';
+  try {
+    await sbPatch('iryx_transactions', txId, {category});
+    await saveToMerchantMemory(original, friendly, category, '');
+    const item = document.getElementById(`rev-item-${txId}`);
+    if (item) item.innerHTML = `<div style="padding:6px 0;font-size:12px;color:var(--sage)">✓ ${esc(friendly)} → ${getC(category).label} · Memória criada</div>`;
+    allTx = allTx.map(t => t.id === txId ? {...t, category} : t);
+    toast(`${friendly} → ${getC(category).label}`);
+    // Update badge
+    const remaining = document.querySelectorAll('[id^="rev-item-"]').length - 1;
+    updateRevisaoBadge(remaining);
+  } catch(e) { toast('Erro ao salvar'); }
+}
+
+function skipRevItem(txId) {
+  const item = document.getElementById(`rev-item-${txId}`);
+  if (item) item.style.display = 'none';
+}
+
+function updateRevisaoBadge(count) {
+  const badge = document.getElementById('revisao-badge');
+  if (!badge) return;
+  if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
+  else { badge.style.display = 'none'; }
+}
+
+// ═══════════════════════════════════════════════════════════
+// FASE 3 – PATRIMÔNIO + LINHA DO TEMPO + FLUXO DE DINHEIRO
+// ═══════════════════════════════════════════════════════════
+
+// ── Patrimônio por horizonte temporal ──────────────────────
+async function renderPatrimonio() {
+  const goals = await sbGet('iryx_goals').catch(() => []);
+  allGoalsCache = goals;
+  if (!goals.length) {
+    ['curto','medio','longo'].forEach(h => {
+      document.getElementById(`pat-${h}`).innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="emptyt">Nenhuma meta ainda.</div></div>';
+    });
+    patTab('metas');
+    return;
+  }
+  const now = new Date();
+  const y1 = new Date(now); y1.setFullYear(now.getFullYear()+1);
+  const y3 = new Date(now); y3.setFullYear(now.getFullYear()+3);
+  const curto=[], medio=[], longo=[];
+  goals.forEach(g => {
+    if (!g.deadline) { longo.push(g); return; }
+    const dl = new Date(g.deadline);
+    if (dl <= y1) curto.push(g);
+    else if (dl <= y3) medio.push(g);
+    else longo.push(g);
+  });
+
+  const mkCard = g => {
+    const pct = g.target>0 ? Math.min(100, Math.round(g.current/g.target*100)) : 0;
+    let eta = '', aporte = '';
+    if (g.deadline) {
+      const dl = new Date(g.deadline), diff = Math.round((dl-now)/(1000*60*60*24*30.4));
+      eta = diff > 0 ? `${diff} mese${diff!==1?'s':''} restante${diff!==1?'s':''}` : 'Prazo expirado';
+      if (g.target > g.current && diff > 0) {
+        aporte = fmt((g.target-g.current)/diff) + '/mês necessário';
+      }
+    }
+    return `<div class="gc">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+        <div class="gn" style="margin:0">${esc(g.name)}</div>
+        ${pct>=100?'<span style="font-size:10px;background:var(--sage);color:#fff;padding:2px 7px;border-radius:8px;flex-shrink:0">✓</span>':''}
+      </div>
+      <div class="gv" style="margin:8px 0">${fmt(g.current)} <span style="font-size:11px;color:var(--t3)">/ ${fmt(g.target)}</span></div>
+      <div class="pb" style="margin-bottom:6px"><div class="pf ${pct>=100?'ok':''}" style="width:${pct}%"></div></div>
+      <div style="font-size:10.5px;color:var(--t3);line-height:1.7">
+        ${pct}% concluído · falta ${fmt(Math.max(0,g.target-g.current))}
+        ${eta?`<br>${eta}`:''}
+        ${aporte?`<br><span style="color:var(--acc)">${aporte}</span>`:''}
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn bg" style="font-size:10.5px;padding:4px 9px"
+          onclick="addToGoal('${g.id}','${g.name.replace(/'/g,"\'")}',${g.current})">+ Depositar</button>
+        <button class="btn bg" style="font-size:10.5px;padding:4px 9px"
+          onclick="openEditGoal('${g.id}')">Editar</button>
+      </div>
+    </div>`;
+  };
+
+  const empty = '<div class="empty" style="grid-column:1/-1"><div class="emptyt">Nenhuma meta neste horizonte.</div></div>';
+  document.getElementById('pat-curto').innerHTML = curto.length ? curto.map(mkCard).join('') : empty;
+  document.getElementById('pat-medio').innerHTML = medio.length ? medio.map(mkCard).join('') : empty;
+  document.getElementById('pat-longo').innerHTML = longo.length ? longo.map(mkCard).join('') : empty;
+  patTab('metas');
+}
+
+function patTab(tab) {
+  const metas = document.getElementById('pat-metas');
+  const tl = document.getElementById('pat-timeline');
+  const btnM = document.getElementById('pat-tab-metas');
+  const btnT = document.getElementById('pat-tab-timeline');
+  if (!metas || !tl) return;
+  metas.style.display = tab==='metas' ? 'block' : 'none';
+  tl.style.display = tab==='timeline' ? 'block' : 'none';
+  if (btnM) btnM.className = tab==='metas' ? 'btn bp' : 'btn bg';
+  if (btnT) btnT.className = tab==='timeline' ? 'btn bp' : 'btn bg';
+  if (tab === 'timeline') renderTimeline();
+}
+
+// ── Linha do Tempo patrimonial ──────────────────────────────
+let timelineData = [];
+async function renderTimeline() {
+  const el = document.getElementById('timeline-list');
+  if (!el) return;
+  try { timelineData = await sbGet('iryx_timeline','order=date.asc').catch(() => []); }
+  catch(e) { timelineData = []; }
+
+  if (!timelineData.length) {
+    el.innerHTML = `<div style="text-align:center;padding:50px 20px;color:var(--t3)">
+      <div style="font-size:32px;margin-bottom:10px">◎</div>
+      <div style="font-size:13px">Registre marcos importantes da sua jornada.</div>
+      <div style="font-size:11px;margin-top:4px;color:var(--t4)">Ex: Terreno quitado, Primeiro aporte, Meta dos R$ 100k atingida...</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = `<div style="position:relative;padding-left:30px">
+    <div style="position:absolute;left:11px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom,var(--sage)66,var(--rose)66);border-radius:2px"></div>
+    ${timelineData.map((m,i) => `
+      <div style="position:relative;margin-bottom:18px">
+        <div style="position:absolute;left:-26px;top:6px;width:12px;height:12px;border-radius:50%;background:${i%2===0?'var(--sage)':'var(--rose)'};border:2.5px solid var(--bg2);box-shadow:0 0 0 2px ${i%2===0?'var(--sage)':'var(--rose)'}22"></div>
+        <div class="card" style="padding:12px 14px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div style="font-size:13px;font-weight:600;color:var(--t1)">${esc(m.title)}</div>
+            <div style="font-size:10.5px;color:var(--t4);flex-shrink:0">${fmtD(m.date)}</div>
+          </div>
+          ${m.notes ? `<div style="font-size:12px;color:var(--t3);margin-top:5px;line-height:1.45">${esc(m.notes)}</div>` : ''}
+          <button class="btn bg" style="font-size:10px;padding:2px 8px;margin-top:8px;color:var(--wine)"
+            onclick="delTimeline('${m.id}')">Excluir</button>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function openTimelineMod() {
+  openMod('mod-timeline');
+  const d = new Date();
+  document.getElementById('tl-date').value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  document.getElementById('tl-title').value = '';
+  document.getElementById('tl-notes').value = '';
+}
+
+async function saveTimeline() {
+  const title = document.getElementById('tl-title')?.value.trim();
+  const date = document.getElementById('tl-date')?.value;
+  const notes = document.getElementById('tl-notes')?.value.trim();
+  if (!title || !date) { toast('Preencha título e data'); return; }
+  try {
+    await sbPost('iryx_timeline', {title, date, notes: notes||''});
+    closeMod('mod-timeline');
+    toast('Marco registrado ✓ ');
+    renderTimeline();
+  } catch(e) { toast('Erro ao salvar — rode a migration SQL'); }
+}
+
+async function delTimeline(id) {
+  if (!confirm('Excluir este marco?')) return;
+  try { await sbDel('iryx_timeline', id); toast('Marco excluído'); renderTimeline(); }
+  catch(e) { toast('Erro ao excluir'); }
+}
+
+// ── Fluxo de Dinheiro (Waterfall) ──────────────────────────
+function renderFluxo(rec, des, txM) {
+  const sec = document.getElementById('home-fluxo-section');
+  const el = document.getElementById('home-fluxo');
+  if (!sec || !el || rec <= 0) { if(sec) sec.style.display='none'; return; }
+
+  const necessidades = txM
+    .filter(t => t.type==='despesa' && (t.nature==='fixo' || ['moradia','saude','alimentacao','supermercado','farmacia'].includes(t.category)))
+    .reduce((s,t) => s+Number(t.amount), 0);
+  const qv = txM
+    .filter(t => t.type==='despesa' && ['lazer','vestuario','beleza','tecnologia','educacao'].includes(t.category))
+    .reduce((s,t) => s+Number(t.amount), 0);
+  const outros = Math.max(0, des - necessidades - qv);
+  const livre = Math.max(0, rec - des);
+
+  const steps = [
+    {label:'Receita total',  val:rec,           color:'#7aa87a', icon:'↑'},
+    {label:'Necessidades',   val:necessidades,  color:'#7a9eb0', icon:'⌂'},
+    {label:'Qualidade de vida', val:qv,         color:'#9b87b0', icon:'◎'},
+    {label:'Outros gastos',  val:outros,        color:'#c09060', icon:'·'},
+    {label:'Saldo livre',    val:livre,         color:livre>0?'#7aa87a':'#b05a5a', icon:'◈'},
+  ];
+
+  sec.style.display = 'block';
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:7px">
+    ${steps.map(s => {
+      const pct = rec>0 ? Math.min(100, Math.round(Math.abs(s.val)/rec*100)) : 0;
+      const showInner = pct > 18;
+      return `<div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:11px;color:var(--t3);width:118px;flex-shrink:0;text-align:right;white-space:nowrap">${s.icon} ${s.label}</div>
+        <div style="flex:1;height:22px;background:var(--border);border-radius:3px;overflow:hidden;position:relative">
+          <div style="height:100%;width:${pct}%;background:${s.color};border-radius:3px;transition:width .6s ease;display:flex;align-items:center;padding-left:8px;box-sizing:border-box">
+            ${showInner ? `<span style="font-size:10px;color:rgba(255,255,255,.9);font-family:'DM Mono',monospace;white-space:nowrap">${fmt(s.val)}</span>` : ''}
+          </div>
+        </div>
+        ${!showInner ? `<div style="font-size:10.5px;font-family:'DM Mono',monospace;color:var(--t2);width:80px;flex-shrink:0">${fmt(s.val)}</div>` : '<div style="width:80px;flex-shrink:0"></div>'}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// FIM FASE 2 + 3
 // ═══════════════════════════════════════════════════════════
 </script>
 </body>
