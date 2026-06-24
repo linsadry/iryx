@@ -2712,14 +2712,8 @@ function showPR(txs,bank){
     var autocat=mem?mem.category:(t.category||'outros');
     var opts=CATS_DES.map(function(c){return '<option value="'+c.id+'"'+(c.id===autocat?' selected':'')+'>'+c.label+'</option>';}).join('');
     var memlbl=mem?'<span style="font-size:9px;color:var(--sage);margin-left:4px">'+(mem.source==='memory'?'◉ memória':'◎ regra')+'</span>':'';
-    rows+='<tr'+(dup?' class="dup-row"':'')+'>'\
-      +'<td><input type="checkbox" id="pc'+i+'" '+chk+'></td>'\
-      +'<td class="mn">'+fmtD(t.date)+'</td>'\
-      +'<td>'+(mem&&mem.friendly?'<b>'+esc(mem.friendly)+'</b> <span style="font-size:10px;color:var(--t4)">'+esc(t.description)+'</span>':esc(t.description))+(dup?'<span class="dup-bdg">já existe</span>':'')+memlbl+'</td>'\
-      +'<td><select id="pcat'+i+'" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--r);padding:3px 7px;font-size:10.5px;color:var(--text);outline:none">'+opts+'</select></td>'\
-      +'<td style="text-align:right" class="'+(dup?'mn':'aneg')+'">− '+fmt(t.amount)+'</td>'\
-      +'</tr>';
-  }
+    var descCell=(mem&&mem.friendly)?'<b>'+esc(mem.friendly)+'</b> <span style="font-size:10px;color:var(--t4)">'+esc(t.description)+'</span>':esc(t.description);
+    rows+='<tr'+(dup?' class="dup-row"':'')+'>'+'<td><input type="checkbox" id="pc'+i+'" '+chk+'></td>'+'<td class="mn">'+fmtD(t.date)+'</td>'+'<td>'+descCell+(dup?'<span class="dup-bdg">já existe</span>':'')+memlbl+'</td>'+'<td><select id="pcat'+i+'" style="background:var(--bg4);border:1px solid var(--border);border-radius:var(--r);padding:3px 7px;font-size:10.5px;color:var(--text);outline:none">'+opts+'</select></td>'+'<td style="text-align:right" class="'+(dup?'mn':'aneg')+'">− '+fmt(t.amount)+'</td>'+'</tr>';
   document.getElementById('pdftb').innerHTML=rows;
   document.getElementById('pdfres').style.display='block';
 }
