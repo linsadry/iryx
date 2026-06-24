@@ -4175,64 +4175,61 @@ async function renderRevisao() {
   }
 
   updateRevisaoBadge(unclassified.length);
-  const shown = unclassified.slice(0, 30);
-  const catOpts = CATS_DES.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
 
-  el.innerHTML = `
-    <div style="padding:0 24px 16px">
-      <div class="ins info"><div class="insb">
-        <b>${unclassified.length}</b> transaç${unclassified.length!==1?'ões':'ão'} aguardando classificação.
-        Ao classificar, o Iryx reconhecerá automaticamente nas próximas importações.
-      </div></div>
-    </div>
-    ${shown.map(t => {
-      return `<div class="sec" style="padding:14px 20px;margin:0 16px 10px;border-radius:var(--r)" id="rev-item-${t.id}">
-        <div style="display:flex;justify-content:space-between;margin-bottom:10px">
-          <div>
-            <div style="font-size:13px;font-weight:600;color:var(--t1)">${esc(t.description)}</div>
-            <div style="font-size:11px;color:var(--t4)">${fmtD(t.date)} · ${t.type==='despesa'?'−':'+'} ${fmt(t.amount)}</div>
-          </div>
-          <span style="font-size:10px;background:var(--bg3);color:var(--t4);padding:3px 8px;border-radius:10px;height:fit-content">Não classificado</span>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-          <div style="flex:1;min-width:150px">
-            <div style="font-size:10.5px;color:var(--t3);margin-bottom:4px">Nome amigável</div>
-            <input type="text" id="rev-fn-${t.id}" placeholder="${esc(t.description)}"
-              style="width:100%;box-sizing:border-box;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--r);padding:7px 10px;font-size:12px;color:var(--text);outline:none">
-          </div>
-          <div style="flex:1;min-width:130px">
-            <div style="font-size:10.5px;color:var(--t3);margin-bottom:4px">Categoria</div>
-            <select id="rev-cat-${t.id}"
-              style="width:100%;box-sizing:border-box;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--r);padding:7px 10px;font-size:12px;color:var(--text);outline:none">
-              ${catOpts}
-            </select>
-          </div>
-          <div style="display:flex;gap:6px;flex-shrink:0">
-            <button class="btn bp" style="font-size:12px;padding:7px 14px"
-              onclick="classifyAndSave('${t.id}','${t.description.replace(/\/g,'\\').replace(/'/g,"\'").replace(/"/g,'\"')}')">
-              Classificar ✓
-            </button>
-            <button class="btn bg" style="font-size:12px;padding:7px 10px;color:var(--t4)"
-              onclick="skipRevItem('${t.id}')">Pular</button>
-          </div>
-        </div>
-      </div>`;
-    }).join('')}
-    ${unclassified.length > 30 ? `<div style="text-align:center;padding:12px;color:var(--t3);font-size:12px">Mostrando 30 de ${unclassified.length}. Classifique e recarregue para ver mais.</div>` : ''}
-  `;
+  // Store descriptions in a global map — avoids embedding strings in onclick
+  window._revDescMap = {};
+  unclassified.forEach(t => { window._revDescMap[t.id] = t.description; });
+
+  const shown = unclassified.slice(0, 30);
+  const catOpts = CATS_DES.map(c => '<option value="' + c.id + '">' + c.label + '</option>').join('');
+  const stInp = 'width:100%;box-sizing:border-box;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--r);padding:7px 10px;font-size:12px;color:var(--text);outline:none';
+
+  el.innerHTML =
+    '<div style="padding:0 24px 16px">' +
+    '<div class="ins info"><div class="insb"><b>' + unclassified.length + '</b> transaç' +
+    (unclassified.length !== 1 ? 'ões' : 'ão') +
+    ' aguardando classificação. Ao classificar, o Iryx reconhecerá automaticamente nas próximas importações.</div></div></div>' +
+    shown.map(t =>
+      '<div class="sec" style="padding:14px 20px;margin:0 16px 10px;border-radius:var(--r)" id="rev-item-' + t.id + '">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:10px">' +
+          '<div>' +
+            '<div style="font-size:13px;font-weight:600;color:var(--t1)">' + esc(t.description) + '</div>' +
+            '<div style="font-size:11px;color:var(--t4)">' + fmtD(t.date) + ' · − ' + fmt(t.amount) + '</div>' +
+          '</div>' +
+          '<span style="font-size:10px;background:var(--bg3);color:var(--t4);padding:3px 8px;border-radius:10px;height:fit-content">Não classificado</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">' +
+          '<div style="flex:1;min-width:150px">' +
+            '<div style="font-size:10.5px;color:var(--t3);margin-bottom:4px">Nome amigável</div>' +
+            '<input type="text" id="rev-fn-' + t.id + '" placeholder="' + esc(t.description) + '" style="' + stInp + '">' +
+          '</div>' +
+          '<div style="flex:1;min-width:130px">' +
+            '<div style="font-size:10.5px;color:var(--t3);margin-bottom:4px">Categoria</div>' +
+            '<select id="rev-cat-' + t.id + '" style="' + stInp + '">' + catOpts + '</select>' +
+          '</div>' +
+          '<div style="display:flex;gap:6px;flex-shrink:0">' +
+            '<button class="btn bp" style="font-size:12px;padding:7px 14px" data-id="' + t.id + '" onclick="classifyAndSave(this.dataset.id)">Classificar ✓</button>' +
+            '<button class="btn bg" style="font-size:12px;padding:7px 10px;color:var(--t4)" data-id="' + t.id + '" onclick="skipRevItem(this.dataset.id)">Pular</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    ).join('') +
+    (unclassified.length > 30
+      ? '<div style="text-align:center;padding:12px;color:var(--t3);font-size:12px">Mostrando 30 de ' + unclassified.length + '. Classifique e recarregue para ver mais.</div>'
+      : '');
 }
 
-async function classifyAndSave(txId, original) {
-  const friendly = (document.getElementById(`rev-fn-${txId}`)?.value || '').trim() || original;
-  const category = document.getElementById(`rev-cat-${txId}`)?.value || 'outros';
+async function classifyAndSave(txId) {
+  const original = (window._revDescMap || {})[txId] || '';
+  const friendly = (document.getElementById('rev-fn-' + txId)?.value || '').trim() || original;
+  const category = document.getElementById('rev-cat-' + txId)?.value || 'outros';
   try {
     await sbPatch('iryx_transactions', txId, {category});
     await saveToMerchantMemory(original, friendly, category, '');
-    const item = document.getElementById(`rev-item-${txId}`);
-    if (item) item.innerHTML = `<div style="padding:6px 0;font-size:12px;color:var(--sage)">✓ ${esc(friendly)} → ${getC(category).label} · Memória criada</div>`;
-    allTx = allTx.map(t => t.id === txId ? {...t, category} : t);
-    toast(`${friendly} → ${getC(category).label}`);
-    // Update badge
+    const item = document.getElementById('rev-item-' + txId);
+    if (item) item.innerHTML = '<div style="padding:6px 0;font-size:12px;color:var(--sage)">✓ ' + esc(friendly) + ' → ' + getC(category).label + ' · Memória criada</div>';
+    allTx = allTx.map(t => t.id === txId ? Object.assign({}, t, {category}) : t);
+    toast(friendly + ' → ' + getC(category).label);
     const remaining = document.querySelectorAll('[id^="rev-item-"]').length - 1;
     updateRevisaoBadge(remaining);
   } catch(e) { toast('Erro ao salvar'); }
@@ -4301,7 +4298,7 @@ async function renderPatrimonio() {
       </div>
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
         <button class="btn bg" style="font-size:10.5px;padding:4px 9px"
-          onclick="addToGoal('${g.id}','${g.name.replace(/'/g,"\'")}',${g.current})">+ Depositar</button>
+          data-gid="${g.id}" data-gcur="${g.current}" onclick="addGoalFromData(this)">+ Depositar</button>
         <button class="btn bg" style="font-size:10.5px;padding:4px 9px"
           onclick="openEditGoal('${g.id}')">Editar</button>
       </div>
@@ -4313,6 +4310,15 @@ async function renderPatrimonio() {
   document.getElementById('pat-medio').innerHTML = medio.length ? medio.map(mkCard).join('') : empty;
   document.getElementById('pat-longo').innerHTML = longo.length ? longo.map(mkCard).join('') : empty;
   patTab('metas');
+}
+
+function addGoalFromData(btn) {
+  const gid = btn.dataset.gid;
+  const gcur = parseFloat(btn.dataset.gcur) || 0;
+  // Find goal name from allGoalsCache
+  const g = (allGoalsCache||[]).find(x => x.id === gid);
+  const name = g ? g.name : '';
+  addToGoal(gid, name, gcur);
 }
 
 function patTab(tab) {
