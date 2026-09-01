@@ -1,0 +1,11 @@
+{
+  "version": "2.1",
+  "exported_at": "2026-09-01",
+  "tables": {
+    "iryx_transactions": [],
+    "iryx_goals": [],
+    "iryx_budgets": [],
+    "iryx_clinicas": [],
+    "iryx_turnos": []
+  }
+}
